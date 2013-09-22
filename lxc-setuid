@@ -1,0 +1,122 @@
+#!/bin/bash
+
+#
+# lxc: linux Container library
+
+# Authors:
+# Daniel Lezcano <daniel.lezcano@free.fr>
+
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or (at your option) any later version.
+
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+
+#
+# This script allows to set or remove the setuid execution bit on the lxc tools.
+# When the capabilities are set, a non root user can manage the containers.
+#
+
+usage() {
+    echo "usage: $(basename $0) [-d]" >&2
+}
+
+help() {
+    usage
+    echo >&2
+    echo "Set or drop the setuid attribute on the lxc tools." >&2
+    echo >&2
+    echo "Options:" >&2
+    echo "  -d   drop the setuid attribute" >&2
+}
+
+setuid()
+{
+    if [ "$1" = "-r" ]; then
+	chmod -s $2
+    else
+	chmod +s $1
+    fi
+}
+
+lxc_setuid()
+{
+    setuid /usr/local/bin/lxc-attach
+    setuid /usr/local/bin/lxc-create
+    setuid /usr/local/bin/lxc-execute
+    setuid /usr/local/bin/lxc-start
+    setuid /usr/local/bin/lxc-restart
+    setuid /usr/local/bin/lxc-unshare
+    setuid /usr/local/bin/lxc-netstat
+    setuid /usr/local/bin/lxc-checkpoint
+    setuid ${libexecdir}/lxc-init
+
+    test -e /usr/local/var/lib/lxc || mkdir -p /usr/local/var/lib/lxc
+    chmod 0777 /usr/local/var/lib/lxc
+}
+
+lxc_dropuid()
+{
+    setuid -r /usr/local/bin/lxc-attach
+    setuid -r /usr/local/bin/lxc-create
+    setuid -r /usr/local/bin/lxc-execute
+    setuid -r /usr/local/bin/lxc-start
+    setuid -r /usr/local/bin/lxc-restart
+    setuid -r /usr/local/bin/lxc-unshare
+    setuid -r /usr/local/bin/lxc-netstat
+    setuid -r /usr/local/bin/lxc-checkpoint
+    setuid -r ${libexecdir}/lxc-init
+
+    chmod 0755 /usr/local/var/lib/lxc
+}
+
+shortoptions='hd'
+longoptions='help'
+
+getopt=$(getopt -o $shortoptions --longoptions  $longoptions -- "$@")
+if [ $? != 0 ]; then
+    usage
+    exit 1
+fi
+
+eval set -- "$getopt"
+
+while true; do
+    case "$1" in
+	-d)
+	    LXC_DROP_CAPS="yes"
+	    shift
+	    ;;
+	-h|--help)
+	    help
+	    exit 0
+	    ;;
+	--)
+	    shift
+	    break
+	    ;;
+	*)
+	    usage
+	    exit 1
+	    ;;
+    esac
+done;
+
+if [ "$(id -u)" != "0" ]; then
+   echo "$(basename $0): must be run as root" >&2
+   exit 1
+fi
+
+if [ -z "$LXC_DROP_CAPS" ]; then
+    lxc_setuid
+else
+    lxc_dropuid
+fi
